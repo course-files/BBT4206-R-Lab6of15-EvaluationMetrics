@@ -241,7 +241,7 @@ print(confusion_matrix)
 fourfoldplot(as.table(confusion_matrix), color = c("grey", "lightblue"),
              main = "Confusion Matrix")
 
-# 2. RMSE and R Squared and MAE ----
+# 2. RMSE, R Squared, and MAE ----
 
 # RMSE stands for "Root Mean Squared Error" and it is defined as the average
 # deviation of the predictions from the observations.
@@ -343,11 +343,11 @@ print(paste("MAE =", mae))
 # and an AUC of 1 refers to a model that predicts perfectly.
 
 # ROC can be broken down into:
-## (i) Sensitivity ----
+## Sensitivity ----
 #         The number of instances from the first class (positive class)
 #         that were actually predicted correctly. This is the true positive
 #         rate, also known as the recall.
-## (ii) Specificity ----
+## Specificity ----
 #         The number of instances from the second class (negative class)
 #         that were actually predicted correctly. This is the true negative
 #         rate.
@@ -402,7 +402,7 @@ confusion_matrix <-
   caret::confusionMatrix(predictions,
                          pima_indians_diabetes_test[, 1:9]$diabetes)
 
-# We can see the sensitivity (≈0.86) and the specificity (≈0.60) below:
+# We can see the sensitivity (≈ 0.86) and the specificity (≈ 0.60) below:
 print(confusion_matrix)
 
 #### AUC ----
@@ -432,28 +432,49 @@ plot(roc_curve, main = "ROC Curve for KNN Model", print.auc = TRUE,
      print.auc.x = 0.6, print.auc.y = 0.6, col = "blue", lwd = 2.5)
 
 # 4. Logarithmic Loss (LogLoss) ----
-# LogLoss can be used to evaluate multi-class classification problems.
-# LogLoss presents a measure of how well the predicted probabilities of
-# the model match the true probabilities of the binary outcomes.
+# Logarithmic Loss (LogLoss) is an evaluation metric commonly used for
+# assessing the performance of classification models, especially when the model
+# provides probability estimates for each class.
 
-# A perfect model would have a LogLoss of 0, while a poor model will have a
-# high LogLoss value.
+# LogLoss measures how well the predicted probabilities align with the true
+# binary outcomes.
 
-# load packages
-library(caret)
-# load the dataset
+# In *binary classification*, the LogLoss formula for a single observation is:
+# LogLoss = −(y log(p) + (1 − y)log(1 − p))
+
+# Where:
+# [*] y is the true binary label (0 or 1).
+# [*] p is the predicted probability of the positive class.
+
+# The LogLoss formula computes the logarithm of the predicted probability for
+# the true class (if y = 1) or the logarithm of the predicted probability for
+# the negative class (if y = 0), and then sums the results.
+
+# A lower LogLoss indicates better model performance, where perfect predictions
+# result in a LogLoss of 0.
+
+########################### ----
+## 4.a. Load the dataset ----
 data(iris)
-# prepare resampling method
-train_control <- trainControl(method="cv", number=5, classProbs=TRUE,
-                             summaryFunction=mnLogLoss)
+
+## 4.b. Train the Model ----
+# We apply the 5-fold repeated cross validation resampling method
+# with 3 repeats
+train_control <- trainControl(method = "repeatedcv", number = 5, repeats = 3,
+                              classProbs = TRUE,
+                              summaryFunction = mnLogLoss)
 set.seed(7)
 # This creates a CART model. One of the parameters used by a CART model is "cp".
 # "cp" refers to the "complexity parameter". It is used to impose a penalty to
 # the tree for having too many splits. The default value is 0.01.
-fit <- train(Species~., data=iris, method="rpart", metric="logLoss", trControl=train_control)
-# display results
-# The results show that a cp value of 0.44 resulted in the lowest LogLoss value.
-print(fit)
+iris_model_cart <- train(Species ~ ., data = iris, method = "rpart",
+                         metric = "logLoss", trControl = train_control)
+
+## 4.c. Display the Model's Performance ----
+### Option 1: Use the metric calculated by caret when training the model ----
+# The results show that a cp value of ≈ 0 resulted in the lowest
+# LogLoss value. The lowest logLoss value is ≈ 0.46.
+print(iris_model_cart)
 
 # [OPTIONAL] **Deinitialization: Create a snapshot of the R environment ----
 # Lastly, as a follow-up to the initialization step, record the packages
@@ -463,27 +484,31 @@ print(fit)
 # renv::snapshot() # nolint
 
 # References ----
-## Brown, M. (2014). Dow Jones index (Version 1) [Dataset]. University of California, Irvine (UCI) Machine Learning Repository. https://doi.org/10.24432/C5788V # nolint ----
 
-## Ferreira, R., Martiniano, A., Ferreira, A., Ferreira, A., & Sassi, R. (2017). Daily demand forecasting orders (Version 1) [Dataset]. University of California, Irvine (UCI) Machine Learning Repository. https://doi.org/10.24432/C5BC8T # nolint ----
+## Kuhn, M., Wing, J., Weston, S., Williams, A., Keefer, C., Engelhardt, A., Cooper, T., Mayer, Z., Kenkel, B., R Core Team, Benesty, M., Lescarbeau, R., Ziem, A., Scrucca, L., Tang, Y., Candan, C., & Hunt, T. (2023). caret: Classification and Regression Training (6.0-94) [Computer software]. https://cran.r-project.org/package=caret # nolint ----
 
-## Iranian churn dataset (Version 1). (2020). [Dataset]. University of California, Irvine (UCI) Machine Learning Repository. https://doi.org/10.24432/C5JW3Z # nolint ----
+## Leisch, F., & Dimitriadou, E. (2023). mlbench: Machine Learning Benchmark Problems (2.1-3.1) [Computer software]. https://cran.r-project.org/web/packages/mlbench/index.html # nolint ----
 
 ## National Institute of Diabetes and Digestive and Kidney Diseases. (1999). Pima Indians Diabetes Dataset [Dataset]. UCI Machine Learning Repository. https://www.kaggle.com/datasets/uciml/pima-indians-diabetes-database # nolint ----
 
-## Yeh, I.-C. (2016). Default of credit card clients (Version 1) [Dataset]. University of California, Irvine (UCI) Machine Learning Repository. https://doi.org/10.24432/C55S3H # nolint ----
+## Robin, X., Turck, N., Hainard, A., Tiberti, N., Lisacek, F., Sanchez, J.-C., Müller, M., Siegert, S., Doering, M., & Billings, Z. (2023). pROC: Display and Analyze ROC Curves (1.18.4) [Computer software]. https://cran.r-project.org/web/packages/pROC/index.html # nolint ----
+
+## Wickham, H., François, R., Henry, L., Müller, K., Vaughan, D., Software, P., & PBC. (2023). dplyr: A Grammar of Data Manipulation (1.1.3) [Computer software]. https://cran.r-project.org/package=dplyr # nolint ----
+
+## Wickham, H., Chang, W., Henry, L., Pedersen, T. L., Takahashi, K., Wilke, C., Woo, K., Yutani, H., Dunnington, D., Posit, & PBC. (2023). ggplot2: Create Elegant Data Visualisations Using the Grammar of Graphics (3.4.3) [Computer software]. https://cran.r-project.org/package=ggplot2 # nolint ----
 
 # **Required Lab Work Submission** ----
 ## Part A ----
 # Create a new file called
-# "Lab5-Submission-ResamplingMethods.R".
-# Provide all the code you have used to perform all the resampling methods we
-# have gone through in this lab on the. This should be done on the
-# "Pima Indians Diabetes" dataset provided in the "mlbench" package.
+# "Lab6-Submission-EvaluationMetrics.R".
+# Provide all the code you have used to demonstrate the classification and
+# regression evaluation metrics we have gone through in this lab.
+# This should be done on any datasets of your choice except the ones used in
+# this lab.
 
 ## Part B ----
 # Upload *the link* to your
-# "Lab5-Submission-ResamplingMethods.R" hosted
+# "Lab6-Submission-EvaluationMetrics.R" hosted
 # on Github (do not upload the .R file itself) through the submission link
 # provided on eLearning.
 
@@ -501,7 +526,7 @@ print(fit)
 # displayable on GitHub when rendered into its .md version
 
 # It should have code chunks that explain all the steps performed on the
-# dataset.
+# datasets.
 
 ## Part D ----
 # Render the .Rmd (R markdown) file into its .md (markdown) version by using
