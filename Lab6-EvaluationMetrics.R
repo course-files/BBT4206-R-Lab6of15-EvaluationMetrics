@@ -1,5 +1,5 @@
 # *****************************************************************************
-# Lab 5: Resampling Methods ----
+# Lab 5: Evaluation Metrics ----
 #
 # Course Code: BBT4206
 # Course Name: Business Intelligence II
@@ -106,20 +106,36 @@ if (require("languageserver")) {
 }
 
 # Introduction ----
-# Resampling methods are techniques that can be used to improve the performance
-# and reliability of machine learning algorithms. They work by creating
-# multiple training sets from the original training set. The model is then
-# trained on each training set, and the results are averaged. This helps to
-# reduce overfitting and improve the model's generalization performance.
+# The choice of evaluation metric depends on the specific problem,
+# the characteristics of the data, and the goals of the modeling task.
+# It's often a good practice to use multiple evaluation metrics to gain a more
+# comprehensive understanding of a model's performance.
 
-# Resampling methods include:
-## Splitting the dataset into train and test sets ----
-## Bootstrapping (sampling with replacement) ----
-## Basic k-fold cross validation ----
-## Repeated cross validation ----
-## Leave One Out Cross-Validation (LOOCV) ----
+# There are several evaluation metrics that can be used to evaluate algorithms.
+# The default metrics used are:
+## (1) "Accuracy" for classification problems and
+## (2) "RMSE" for regression problems
+
+# Accuracy is the percentage of correctly classified instances out of all
+# instances. Accuracy is more useful in binary classification problems than
+# in multi-class classification problems.
+
+# On the other hand, Cohen's Kappa is similar to Accuracy however, it is more
+# useful on classification problems that do not have an equal distribution of
+# instances amongst the classes in the dataset.
+
+# For example, instead of Red are 50 instances and Blue are 50 instances,
+# the distribution can be that Red are 70 instances and Blue are 30 instances.
 
 # STEP 1. Install and Load the Required Packages ----
+## ggplot2 ----
+if (require("ggplot2")) {
+  require("ggplot2")
+} else {
+  install.packages("ggplot2", dependencies = TRUE,
+                   repos = "https://cloud.r-project.org")
+}
+
 ## caret ----
 if (require("caret")) {
   require("caret")
@@ -128,499 +144,316 @@ if (require("caret")) {
                    repos = "https://cloud.r-project.org")
 }
 
-## klaR ----
-if (require("klaR")) {
-  require("klaR")
+## mlbench ----
+if (require("mlbench")) {
+  require("mlbench")
 } else {
-  install.packages("klaR", dependencies = TRUE,
+  install.packages("mlbench", dependencies = TRUE,
                    repos = "https://cloud.r-project.org")
 }
 
-## e1071 ----
-if (require("e1071")) {
-  require("e1071")
+## pROC ----
+if (require("pROC")) {
+  require("pROC")
 } else {
-  install.packages("e1071", dependencies = TRUE,
+  install.packages("pROC", dependencies = TRUE,
                    repos = "https://cloud.r-project.org")
 }
 
-## readr ----
-if (require("readr")) {
-  require("readr")
+## dplyr ----
+if (require("dplyr")) {
+  require("dplyr")
 } else {
-  install.packages("readr", dependencies = TRUE,
+  install.packages("dplyr", dependencies = TRUE,
                    repos = "https://cloud.r-project.org")
 }
 
-## LiblineaR ----
-if (require("LiblineaR")) {
-  require("LiblineaR")
-} else {
-  install.packages("LiblineaR", dependencies = TRUE,
-                   repos = "https://cloud.r-project.org")
-}
+# 1. Accuracy and Cohen's Kappa ----
+## 1.a. Load the dataset ----
+data(PimaIndiansDiabetes)
 
-## naivebayes ----
-if (require("naivebayes")) {
-  require("naivebayes")
-} else {
-  install.packages("naivebayes", dependencies = TRUE,
-                   repos = "https://cloud.r-project.org")
-}
+## 1.b. Determine the Baseline Accuracy ----
+# Identify the number of instances that belong to each class (distribution or
+# class breakdown).
 
-# DATASET 1 (Splitting the dataset): Dow Jones Index ----
-stock_ror_dataset <- read_csv(
-  "data/transforms/dow_jones_index.csv",
-  col_types = cols(
-    stock = col_factor(
-      levels = c(
-        "AA",
-        "AXP",
-        "BA",
-        "BAC",
-        "CAT",
-        "CSCO",
-        "CVX",
-        "DD",
-        "DIS",
-        "GE",
-        "HD",
-        "HPQ",
-        "IBM",
-        "INTC",
-        "JNJ",
-        "JPM",
-        "KRFT",
-        "KO",
-        "MCD",
-        "MMM",
-        "MRK",
-        "MSFT",
-        "PFE",
-        "PG",
-        "T",
-        "TRV",
-        "UTX",
-        "VZ",
-        "WMT",
-        "XOM"
-      )
-    ),
-    date = col_date(format = "%m/%d/%Y")
-  )
-)
-summary(stock_ror_dataset)
+# The result should show that 65% tested negative and 34% tested positive
+# for diabetes.
 
-# The str() function is used to compactly display the structure (variables
-# and data types) of the dataset
-str(stock_ror_dataset)
+# This means that an algorithm can achieve a 65% accuracy by
+# predicting that all instances belong to the class "negative".
 
-## 1. Split the dataset ====
+# This in turn implies that the baseline accuracy is 65%.
+
+pima_indians_diabetes_freq <- PimaIndiansDiabetes$diabetes
+cbind(frequency =
+        table(pima_indians_diabetes_freq),
+      percentage = prop.table(table(pima_indians_diabetes_freq)) * 100)
+
+## 1.c. Split the dataset ----
 # Define a 75:25 train:test data split of the dataset.
 # That is, 75% of the original data will be used to train the model and
 # 25% of the original data will be used to test the model.
-train_index <- createDataPartition(stock_ror_dataset$stock,
+train_index <- createDataPartition(PimaIndiansDiabetes$diabetes,
                                    p = 0.75,
                                    list = FALSE)
-stock_ror_dataset_train <- stock_ror_dataset[train_index, ]
-stock_ror_dataset_test <- stock_ror_dataset[-train_index, ]
+pima_indians_diabetes_train <- PimaIndiansDiabetes[train_index, ]
+pima_indians_diabetes_test <- PimaIndiansDiabetes[-train_index, ]
 
-## 2. Train a Naive Bayes classifier using the training dataset ----
-
-### 2.a. OPTION 1: naiveBayes() function in the e1071 package ----
-# The "naiveBayes()" function (case sensitive) in the "e1071" package
-# is less sensitive to missing values hence all the features (variables
-# /attributes) are considered as independent variables that have an effect on
-# the dependent variable (stock).
-
-stock_ror_dataset_model_nb_e1071 <- # nolint
-  e1071::naiveBayes(stock ~ quarter + date + open + high + low + close +
-                      volume + percent_change_price +
-                      percent_change_volume_over_last_wk +
-                      previous_weeks_volume + next_weeks_open +
-                      next_weeks_close + percent_change_next_weeks_price +
-                      days_to_next_dividend + percent_return_next_dividend,
-                    data = stock_ror_dataset_train)
-
-# The above code can also be written as follows to show a case where all the
-# variables are being considered (stock ~ .):
-stock_ror_dataset_model_nb <-
-  e1071::naiveBayes(stock ~ .,
-                    data = stock_ror_dataset_train)
-
-### 2.b. OPTION 2: naiveBayes() function in the caret package ====
-# The second option uses the caret::train() function in the caret package to
-# train a Naive Bayes classifier but without the attributes that have missing
-# values.
-stock_ror_dataset_model_nb_caret <- # nolint
-  caret::train(stock ~ ., data =
-               stock_ror_dataset_train[, c("quarter", "date", "open",
-                                           "high", "low", "close",
-                                           "volume",
-                                           "percent_change_price",
-                                           "next_weeks_open",
-                                           "next_weeks_close",
-                                           "percent_change_next_weeks_price",
-                                           "days_to_next_dividend",
-                                           "percent_return_next_dividend",
-                                           "stock")],
-               method = "naive_bayes")
-
-## 3. Test the trained model using the testing dataset ----
-### 3.a. Test the trained e1071 Naive Bayes model using the testing dataset ----
-predictions_nb_e1071 <-
-  predict(stock_ror_dataset_model_nb_e1071,
-          stock_ror_dataset_test[, c("quarter", "date", "open", "high",
-                                     "low", "close", "volume",
-                                     "percent_change_price",
-                                     "percent_change_volume_over_last_wk",
-                                     "previous_weeks_volume", "next_weeks_open",
-                                     "next_weeks_close",
-                                     "percent_change_next_weeks_price",
-                                     "days_to_next_dividend",
-                                     "percent_return_next_dividend")])
-
-### 3.b. Test the trained caret Naive Bayes model using the testing dataset ----
-predictions_nb_caret <-
-  predict(stock_ror_dataset_model_nb_caret,
-          stock_ror_dataset_test[, c("quarter", "date", "open", "high",
-                                     "low", "close", "volume",
-                                     "percent_change_price", "next_weeks_open",
-                                     "next_weeks_close",
-                                     "percent_change_next_weeks_price",
-                                     "days_to_next_dividend",
-                                     "percent_return_next_dividend")])
-
-## 4. View the Results ----
-### 4.a. e1071 Naive Bayes model and test results using a confusion matrix ----
-# Please watch the following video first: https://youtu.be/Kdsp6soqA7o
-print(predictions_nb_e1071)
-caret::confusionMatrix(predictions_nb_e1071,
-                       stock_ror_dataset_test[, c("quarter", "date", "open",
-                                                  "high", "low", "close",
-                                                  "volume",
-                                                  "percent_change_price",
-                                                  "percent_change_volume_over_last_wk", # nolint
-                                                  "previous_weeks_volume",
-                                                  "next_weeks_open",
-                                                  "next_weeks_close",
-                                                  "percent_change_next_weeks_price", # nolint
-                                                  "days_to_next_dividend",
-                                                  "percent_return_next_dividend", # nolint
-                                                  "stock")]$stock)
-plot(table(predictions_nb_e1071,
-           stock_ror_dataset_test[, c("quarter", "date", "open", "high", "low",
-                                      "close", "volume", "percent_change_price",
-                                      "percent_change_volume_over_last_wk",
-                                      "previous_weeks_volume",
-                                      "next_weeks_open", "next_weeks_close",
-                                      "percent_change_next_weeks_price",
-                                      "days_to_next_dividend",
-                                      "percent_return_next_dividend",
-                                      "stock")]$stock))
-
-### 4.b. caret Naive Bayes model and test results using a confusion matrix ----
-print(stock_ror_dataset_model_nb_caret)
-caret::confusionMatrix(predictions_nb_caret,
-                       stock_ror_dataset_test[, c("quarter", "date", "open",
-                                                  "high", "low", "close",
-                                                  "volume",
-                                                  "percent_change_price",
-                                                  "percent_change_volume_over_last_wk", # nolint
-                                                  "previous_weeks_volume",
-                                                  "next_weeks_open",
-                                                  "next_weeks_close",
-                                                  "percent_change_next_weeks_price", # nolint
-                                                  "days_to_next_dividend",
-                                                  "percent_return_next_dividend", # nolint
-                                                  "stock")]$stock)
-plot(table(predictions_nb_caret,
-           stock_ror_dataset_test[, c("quarter", "date", "open", "high", "low",
-                                      "close", "volume", "percent_change_price",
-                                      "percent_change_volume_over_last_wk",
-                                      "previous_weeks_volume",
-                                      "next_weeks_open", "next_weeks_close",
-                                      "percent_change_next_weeks_price",
-                                      "days_to_next_dividend",
-                                      "percent_return_next_dividend",
-                                      "stock")]$stock))
-
-# DATASET 2 (Splitting the dataset): Default of credit card clients ----
-defaulter_dataset <-
-  readr::read_csv(
-    "data/default of credit card clients.csv",
-    col_types = cols(
-      SEX = col_factor(levels = c("1", "2")),
-      EDUCATION = col_factor(levels = c("0", "1", "2", "3", "4", "5", "6")),
-      MARRIAGE = col_factor(levels = c("0", "1", "2", "3")),
-      `default payment next month` = col_factor(levels = c("1", "0")),
-      `default payment next month` = col_factor(levels = c("1", "0"))
-    ),
-    skip = 1
-  )
-summary(defaulter_dataset)
-str(defaulter_dataset)
-
-## 1. Split the dataset ----
-# Define an 80:20 train:test split ratio of the dataset
-# (80% of the original data will be used to train the model and 20% of the
-# original data will be used to test the model).
-train_index <- createDataPartition(defaulter_dataset$`default payment next month`, # nolint
-                                   p = 0.80, list = FALSE)
-defaulter_dataset_train <- defaulter_dataset[train_index, ]
-defaulter_dataset_test <- defaulter_dataset[-train_index, ]
-
-## 2. Train a Naive Bayes classifier using the training dataset ----
-
-### 2.a. OPTION 1: "NaiveBayes()" function in the "klaR" package ----
-defaulter_dataset_model_nb_klaR <- # nolint
-  klaR::NaiveBayes(`default payment next month` ~ .,
-                   data = defaulter_dataset_train)
-
-### 2.b. OPTION 2: "naiveBayes()" function in the e1071 package ----
-defaulter_dataset_model_nb_e1071 <- # nolint
-  e1071::naiveBayes(`default payment next month` ~ .,
-                    data = defaulter_dataset_train)
-
-## 3. Test the trained Naive Bayes model using the testing dataset ----
-predictions_nb_e1071 <-
-  predict(defaulter_dataset_model_nb_e1071,
-          defaulter_dataset_test[, 1:25])
-
-## 4. View the Results ----
-### 4.a. e1071 Naive Bayes model and test results using a confusion matrix ----
-print(defaulter_dataset_model_nb_e1071)
-caret::confusionMatrix(predictions_nb_e1071,
-                       defaulter_dataset_test$`default payment next month`)
-# The confusion matrix can also be viewed graphically,
-# although with less information.
-plot(table(predictions_nb_e1071,
-           defaulter_dataset_test$`default payment next month`))
-
-# DATASET 3 (Bootstrapping): Daily Demand Forecasting Orders Data Set =====
-demand_forecasting_dataset <-
-  readr::read_delim(
-    "data/Daily_Demand_Forecasting_Orders.csv",
-    delim = ";",
-    escape_double = FALSE,
-    col_types = cols(
-      `Week of the month (first week, second, third, fourth or fifth week` =
-        col_factor(levels = c("1", "2", "3", "4", "5")),
-      `Day of the week (Monday to Friday)` =
-        col_factor(levels = c("2", "3", "4", "5", "6"))
-    ),
-    trim_ws = TRUE
-  )
-summary(demand_forecasting_dataset)
-str(demand_forecasting_dataset)
-
-## 1. Split the dataset ----
-demand_forecasting_dataset_cor <- cor(demand_forecasting_dataset[, 3:13])
-View(demand_forecasting_dataset_cor)
-# Define a 75:25 train:test data split ratio of the dataset
-# (75% of the original data will be used to train the model and 25% of the
-# original data will be used to test the model)
-train_index <-
-  createDataPartition(demand_forecasting_dataset$`Target (Total orders)`,
-                      p = 0.75, list = FALSE)
-demand_forecasting_dataset_train <- demand_forecasting_dataset[train_index, ] # nolint
-demand_forecasting_dataset_test <- demand_forecasting_dataset[-train_index, ] # nolint
-
-## 2. Train a linear regression model (for regression) ----
-
-### 2.a. Bootstrapping train control ----
-# The "train control" allows you to specify that bootstrapping (sampling with
-# replacement) can be used and also the number of times (repetitions or reps)
-# the sampling with replacement should be done. The code below specifies
-# bootstrapping with 500 reps. (common values for reps are thousands or tens of
-# thousands depending on the hardware resources available).
-
-# This increases the size of the training dataset from 48 observations to
-# approximately 48 x 500 = 24,000 observations for training the model.
-train_control <- trainControl(method = "boot", number = 500)
-
-demand_forecasting_dataset_model_lm <- # nolint
-  caret::train(`Target (Total orders)` ~
-                 `Non-urgent order` + `Urgent order` +
-                   `Order type A` + `Order type B` +
-                   `Order type C` + `Fiscal sector orders` +
-                   `Orders from the traffic controller sector` +
-                   `Banking orders (1)` + `Banking orders (2)` +
-                   `Banking orders (3)`,
-               data = demand_forecasting_dataset_train,
-               trControl = train_control,
-               na.action = na.omit, method = "lm", metric = "RMSE")
-
-## 3. Test the trained linear regression model using the testing dataset ----
-predictions_lm <- predict(demand_forecasting_dataset_model_lm,
-                          demand_forecasting_dataset_test[, 1:13])
-
-## 4. View the RMSE and the predicted values for the 12 observations ----
-print(demand_forecasting_dataset_model_lm)
-print(predictions_lm)
-
-## 5. Use the model to make a prediction on unseen new data ----
-# New data for each of the 12 variables (independent variables) that determine
-# the dependent variable can also be specified as follows in a data frame:
-new_data <-
-  data.frame(`Week of the month (first week, second, third, fourth or fifth week` = c(1), # nolint
-             `Day of the week (Monday to Friday)` = c(2),
-             `Non-urgent order` = c(151.06),
-             `Urgent order` = c(132.11), `Order type A` = c(52.11),
-             `Order type B` = c(109.23),
-             `Order type C` = c(160.11), `Fiscal sector orders` = c(7.832),
-             `Orders from the traffic controller sector` = c(52112),
-             `Banking orders (1)` = c(20130), `Banking orders (2)` = c(94788),
-             `Banking orders (3)` = c(12610), check.names = FALSE)
-
-# The variables that are factors (categorical) in the training dataset must
-# also be defined as factors in the new data
-new_data$`Week of the month (first week, second, third, fourth or fifth week` <-
-  as.factor(new_data$`Week of the month (first week, second, third, fourth or fifth week`) # nolint
-
-new_data$`Day of the week (Monday to Friday)` <-
-  as.factor(new_data$`Day of the week (Monday to Friday)`)
-
-# We now use the model to predict the output based on the unseen new data:
-predictions_lm_new_data <-
-  predict(demand_forecasting_dataset_model_lm, new_data)
-
-# The output below refers to the total orders:
-print(predictions_lm_new_data)
-
-# DATASET 4 (CV, Repeated CV, and LOOCV): Iranian Churn Dataset ----
-churn_dateset <- read_csv(
-  "data/Customer Churn.csv",
-  col_types = cols(
-    Complains = col_factor(levels = c("0",
-                                      "1")),
-    `Age Group` = col_factor(levels = c("1",
-                                        "2", "3", "4", "5")),
-    `Tariff Plan` = col_factor(levels = c("1",
-                                          "2")),
-    Status = col_factor(levels = c("1",
-                                   "2")),
-    Churn = col_factor(levels = c("0",
-                                  "1"))
-  )
-)
-summary(churn_dateset)
-str(churn_dateset)
-
-## 1. Split the dataset ====
-# define a 75:25 train:test split of the dataset
-train_index <- createDataPartition(churn_dateset$`Customer Value`,
-                                   p = 0.75, list = FALSE)
-churn_dateset_train <- churn_dateset[train_index, ]
-churn_dateset_test <- churn_dateset[-train_index, ]
-
-## 2. Regression: Linear Model ----
-### 2.a. 10-fold cross validation ----
-
-# Please watch the following video first: https://youtu.be/fSytzGwwBVw
-# The train control allows you to specify that k-fold cross validation
-# can be used as well as the number of folds (common folds are 5-fold and
-# 10-fold cross validation).
-
-# The k-fold cross-validation method involves splitting the dataset (training
-# dataset) into k-subsets. Each subset is held-out (withheld) while the model is
-# trained on all other subsets. This process is repeated until the accuracy/RMSE
-# is determined for each instance in the dataset, and an overall accuracy/RMSE
-# estimate is provided.
-
-train_control <- trainControl(method = "cv", number = 10)
-
-churn_dateset_model_lm <-
-  caret::train(`Customer Value` ~ .,
-               data = churn_dateset_train,
-               trControl = train_control, na.action = na.omit,
-               method = "lm", metric = "RMSE")
-
-### 2.b. Test the trained linear model using the testing dataset ----
-predictions_lm <- predict(churn_dateset_model_lm, churn_dateset_test[, -13])
-
-### 2.c. View the RMSE and the predicted values ====
-print(churn_dateset_model_lm)
-print(predictions_lm)
-
-## 3. Classification: LDA with k-fold Cross Validation ----
-
-### 3.a. LDA classifier based on a 5-fold cross validation ----
-# We train a Linear Discriminant Analysis (LDA) classifier based on a 5-fold
-# cross validation train control but this time, using the churn variable for
-# classification, not the customer value variable for regression.
+## 1.d. Train the Model ----
+# We apply the 5-fold cross validation resampling method
 train_control <- trainControl(method = "cv", number = 5)
 
-churn_dateset_model_lda <-
-  caret::train(`Churn` ~ ., data = churn_dateset_train,
-               trControl = train_control, na.action = na.omit, method = "lda2",
-               metric = "Accuracy")
+# We then train a Generalized Linear Model to predict the value of Diabetes
+# (whether the patient will test positive/negative for diabetes).
 
-### 3.b. Test the trained LDA model using the testing dataset ----
-predictions_lda <- predict(churn_dateset_model_lda,
-                           churn_dateset_test[, 1:13])
+# `set.seed()` is a function that is used to specify a starting point for the
+# random number generator to a specific value. This ensures that every time you
+# run the same code, you will get the same "random" numbers.
+set.seed(7)
+diabetes_model_glm <-
+  train(diabetes ~ ., data = pima_indians_diabetes_train, method = "glm",
+        metric = "Accuracy", trControl = train_control)
 
-### 3.c. View the summary of the model and view the confusion matrix ----
-print(churn_dateset_model_lda)
-caret::confusionMatrix(predictions_lda, churn_dateset_test$Churn)
+## 1.e. Display the Model's Performance ----
+### Option 1: Use the metric calculated by caret when training the model ----
+# The results show an accuracy of approximately 77% (slightly above the baseline
+# accuracy) and a Kappa of approximately 49%.
+print(diabetes_model_glm)
 
-## 4. Classification: Naive Bayes with Repeated k-fold Cross Validation ----
-### 4.a. Train an e1071::naive Bayes classifier based on the churn variable ----
-churn_dateset_model_nb <-
-  e1071::naiveBayes(`Churn` ~ ., data = churn_dateset_train)
+### Option 2: Compute the metric yourself using the test dataset ----
+# A confusion matrix is useful for multi-class classification problems.
+# Please watch the following video first: https://youtu.be/Kdsp6soqA7o
 
-### 4.b. Test the trained naive Bayes classifier using the testing dataset ----
-predictions_nb_e1071 <-
-  predict(churn_dateset_model_nb, churn_dateset_test[, 1:14])
+# The Confusion Matrix is a type of matrix which is used to visualize the
+# predicted values against the actual Values. The row headers in the
+# confusion matrix represent predicted values and column headers are used to
+# represent actual values.
 
-### 4.c. View a summary of the naive Bayes model and the confusion matrix ----
-print(churn_dateset_model_nb)
-caret::confusionMatrix(predictions_nb_e1071, churn_dateset_test$Churn)
+predictions <- predict(diabetes_model_glm, pima_indians_diabetes_test[, 1:8])
+confusion_matrix <-
+  caret::confusionMatrix(predictions,
+                         pima_indians_diabetes_test[, 1:9]$diabetes)
+print(confusion_matrix)
 
-## 5. Classification: SVM with Repeated k-fold Cross Validation ----
-### 5.a. SVM Classifier using 5-fold cross validation with 3 reps ----
-# We train a Support Vector Machine (for classification) using "Churn" variable
-# in the training dataset based on a repeated 5-fold cross validation train
-# control with 3 reps.
+### Option 3: Display a graphical confusion matrix ----
 
-# The repeated k-fold cross-validation method involves repeating the number of
-# times the dataset is split into k-subsets. The final model accuracy/RMSE is
-# taken as the mean from the number of repeats.
+# Visualizing Confusion Matrix
+fourfoldplot(as.table(confusion_matrix), color = c("grey", "lightblue"),
+             main = "Confusion Matrix")
 
-train_control <- trainControl(method = "repeatedcv", number = 5, repeats = 3)
+# 2. RMSE and R Squared and MAE ----
 
-churn_dateset_model_svm <-
-  caret::train(`Churn` ~ ., data = churn_dateset_train,
-               trControl = train_control, na.action = na.omit,
-               method = "svmLinearWeights2", metric = "Accuracy")
+# RMSE stands for "Root Mean Squared Error" and it is defined as the average
+# deviation of the predictions from the observations.
 
-### 5.b. Test the trained SVM model using the testing dataset ----
-predictions_svm <- predict(churn_dateset_model_svm, churn_dateset_test[, 1:13])
+# R Squared (R^2) is also known as the "coefficient of determination".
+# It provides a goodness of fit measure for the predictions to the
+# observations.
 
-### 5.c. View a summary of the model and view the confusion matrix ----
-print(churn_dateset_model_svm)
-caret::confusionMatrix(predictions_svm, churn_dateset_test$Churn)
+# NOTE: R Squared (R^2) is a value between 0 and 1 such that
+# 0 refers to "no fit" and 1 refers to a "perfect fit".
 
-## 6. Classification: Naive Bayes with Leave One Out Cross Validation ----
-# In Leave One Out Cross-Validation (LOOCV), a data instance is left out and a
-# model constructed on all other data instances in the training set. This is
-# repeated for all data instances.
+## 2.a. Load the dataset ----
+data(longley)
+summary(longley)
+longley_no_na <- na.omit(longley)
 
-### 6.a. Train a Naive Bayes classifier based on an LOOCV ----
-train_control <- trainControl(method = "LOOCV")
+## 2.b. Split the dataset ----
+# Define a train:test data split of the dataset. Such that 10/16 are in the
+# train set and the remaining 6/16 observations are in the test set.
 
-churn_dateset_model_nb_loocv <-
-  caret::train(`Churn` ~ ., data = churn_dateset_train,
-               trControl = train_control, na.action = na.omit,
-               method = "naive_bayes", metric = "Accuracy")
+# In this case, we split randomly without using a predictor variable in the
+# caret::createDataPartition function.
 
-### 6.b. Test the trained model using the testing dataset ====
-predictions_nb_loocv <-
-  predict(churn_dateset_model_nb_loocv, churn_dateset_test[, 1:14])
+# For reproducibility; by ensuring that you end up with the same
+# "random" samples
+set.seed(7)
 
-### 6.c. View the confusion matrix ====
-print(churn_dateset_model_nb_loocv)
-caret::confusionMatrix(predictions_nb_loocv, churn_dateset_test$Churn)
+# We apply simple random sampling using the base::sample function to get
+# 10 samples
+train_index <- sample(1:dim(longley)[1], 10) # nolint: seq_linter.
+longley_train <- longley[train_index, ]
+longley_test <- longley[-train_index, ]
+
+## 2.c. Train the Model ----
+# We apply bootstrapping with 1,000 repetitions
+train_control <- trainControl(method = "boot", number = 1000)
+
+# We then train a linear regression model to predict the value of Employed
+# (the number of people that will be employed given the independent variables).
+longley_model_lm <-
+  train(Employed ~ ., data = longley_train, test = longley_test[, 1:6],
+        na.action = na.omit, method = "lm", metric = "RMSE",
+        trControl = train_control)
+
+## 2.d. Display the Model's Performance ----
+### Option 1: Use the metric calculated by caret when training the model ----
+# The results show an RMSE value of approximately 4.3898 and
+# an R Squared value of approximately 0.8594
+# (the closer the R squared value is to 1, the better the model).
+print(longley_model_lm)
+
+### Option 2: Compute the metric yourself using the test dataset ----
+predictions <- predict(longley_model_lm, longley_test[, 1:6])
+
+# These are the 6 values for employment that the model has predicted:
+print(predictions)
+
+#### RMSE ----
+rmse <- sqrt(mean((longley_test$Employed - predictions)^2))
+print(paste("RMSE =", rmse))
+
+#### SSR ----
+# SSR is the sum of squared residuals (the sum of squared differences
+# between observed and predicted values)
+ssr <- sum((longley_test$Employed - predictions)^2)
+print(paste("SSR =", ssr))
+
+#### SST ----
+# SST is the total sum of squares (the sum of squared differences
+# between observed values and their mean)
+sst <- sum((longley_test$Employed - mean(longley_test$Employed))^2)
+print(paste("SST =", sst))
+
+#### R Squared ----
+# We then use SSR and SST to compute the value of R squared
+r_squared <- 1 - (ssr / sst)
+print(paste("R Squared =", r_squared))
+
+#### MAE ----
+# MAE measures the average absolute differences between the predicted and
+# actual values in a dataset. MAE is useful for assessing how close the model's
+# predictions are to the actual values.
+
+# MAE is expressed in the same units as the target variable, making it easy to
+# interpret. For example, if you are predicting the amount paid in rent,
+# and the MAE is KES. 10,000, it means, on average, your model's predictions
+# are off by about KES. 10,000.
+absolute_errors <- abs(predictions - longley_test$Employed)
+mae <- mean(absolute_errors)
+print(paste("MAE =", mae))
+
+# 3. Area Under ROC Curve ----
+# Area Under Receiver Operating Characteristic Curve (AUROC) or simply
+# "Area Under Curve (AUC)" or "ROC" represents a model's ability to
+# discriminate between two classes.
+
+# ROC is a value between 0.5 and 1 such that 0.5 refers to a model with a
+# very poor prediction (essentially a random prediction; 50-50 accuracy)
+# and an AUC of 1 refers to a model that predicts perfectly.
+
+# ROC can be broken down into:
+## (i) Sensitivity ----
+#         The number of instances from the first class (positive class)
+#         that were actually predicted correctly. This is the true positive
+#         rate, also known as the recall.
+## (ii) Specificity ----
+#         The number of instances from the second class (negative class)
+#         that were actually predicted correctly. This is the true negative
+#         rate.
+
+## 3.a. Load the dataset ----
+data(PimaIndiansDiabetes)
+## 3.b. Determine the Baseline Accuracy ----
+# The baseline accuracy is 65%.
+
+pima_indians_diabetes_freq <- PimaIndiansDiabetes$diabetes
+cbind(frequency =
+        table(pima_indians_diabetes_freq),
+      percentage = prop.table(table(pima_indians_diabetes_freq)) * 100)
+
+## 3.c. Split the dataset ----
+# Define an 80:20 train:test data split of the dataset.
+train_index <- createDataPartition(PimaIndiansDiabetes$diabetes,
+                                   p = 0.8,
+                                   list = FALSE)
+pima_indians_diabetes_train <- PimaIndiansDiabetes[train_index, ]
+pima_indians_diabetes_test <- PimaIndiansDiabetes[-train_index, ]
+
+## 3.d. Train the Model ----
+# We apply the 10-fold cross validation resampling method
+train_control <- trainControl(method = "cv", number = 10,
+                              classProbs = TRUE,
+                              summaryFunction = twoClassSummary)
+
+# We then train a k Nearest Neighbours Model to predict the value of Diabetes
+# (whether the patient will test positive/negative for diabetes).
+
+set.seed(7)
+diabetes_model_knn <-
+  train(diabetes ~ ., data = pima_indians_diabetes_train, method = "knn",
+        metric = "ROC", trControl = train_control)
+
+## 3.e. Display the Model's Performance ----
+### Option 1: Use the metric calculated by caret when training the model ----
+# The results show a ROC value of approximately 0.76 (the closer to 1,
+# the higher the prediction accuracy) when the parameter k = 9
+# (9 nearest neighbours).
+
+print(diabetes_model_knn)
+
+### Option 2: Compute the metric yourself using the test dataset ----
+#### Sensitivity and Specificity ----
+predictions <- predict(diabetes_model_knn, pima_indians_diabetes_test[, 1:8])
+# These are the values for diabetes that the
+# model has predicted:
+print(predictions)
+confusion_matrix <-
+  caret::confusionMatrix(predictions,
+                         pima_indians_diabetes_test[, 1:9]$diabetes)
+
+# We can see the sensitivity (≈0.86) and the specificity (≈0.60) below:
+print(confusion_matrix)
+
+#### AUC ----
+# The type = "prob" argument specifies that you want to obtain class
+# probabilities as the output of the prediction instead of class labels.
+predictions <- predict(diabetes_model_knn, pima_indians_diabetes_test[, 1:8],
+                       type = "prob")
+
+# These are the class probability values for diabetes that the
+# model has predicted:
+print(predictions)
+
+# "Controls" and "Cases": In a binary classification problem, you typically
+# have two classes, often referred to as "controls" and "cases."
+# These classes represent the different outcomes you are trying to predict.
+# For example, in a medical context, "controls" might represent patients without
+# a disease, and "cases" might represent patients with the disease.
+
+# Setting the Direction: The phrase "Setting direction: controls < cases"
+# specifies how you define which class is considered the positive class (cases)
+# and which is considered the negative class (controls) when calculating
+# sensitivity and specificity.
+roc_curve <- roc(pima_indians_diabetes_test$diabetes, predictions$neg)
+
+# Plot the ROC curve
+plot(roc_curve, main = "ROC Curve for KNN Model", print.auc = TRUE,
+     print.auc.x = 0.6, print.auc.y = 0.6, col = "blue", lwd = 2.5)
+
+# 4. Logarithmic Loss (LogLoss) ----
+# LogLoss can be used to evaluate multi-class classification problems.
+# LogLoss presents a measure of how well the predicted probabilities of
+# the model match the true probabilities of the binary outcomes.
+
+# A perfect model would have a LogLoss of 0, while a poor model will have a
+# high LogLoss value.
+
+# load packages
+library(caret)
+# load the dataset
+data(iris)
+# prepare resampling method
+train_control <- trainControl(method="cv", number=5, classProbs=TRUE,
+                             summaryFunction=mnLogLoss)
+set.seed(7)
+# This creates a CART model. One of the parameters used by a CART model is "cp".
+# "cp" refers to the "complexity parameter". It is used to impose a penalty to
+# the tree for having too many splits. The default value is 0.01.
+fit <- train(Species~., data=iris, method="rpart", metric="logLoss", trControl=train_control)
+# display results
+# The results show that a cp value of 0.44 resulted in the lowest LogLoss value.
+print(fit)
 
 # [OPTIONAL] **Deinitialization: Create a snapshot of the R environment ----
 # Lastly, as a follow-up to the initialization step, record the packages

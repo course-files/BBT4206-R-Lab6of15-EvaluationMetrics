@@ -2,6 +2,7 @@
     "cSpell.words": [
         "aomondi",
         "arff",
+        "AUROC",
         "BBIT",
         "corrplot",
         "Datahub",
@@ -35,5 +36,8 @@
         "Virginica",
         "Wilcoxon",
         "Worldometers"
-    ]
+    ],
+    "zenMode.hideLineNumbers": false,
+    "zenMode.centerLayout": true,
+    "zenMode.hideStatusBar": false
 }
