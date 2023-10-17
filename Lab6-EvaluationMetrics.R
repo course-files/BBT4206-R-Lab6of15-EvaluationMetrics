@@ -282,7 +282,7 @@ train_control <- trainControl(method = "boot", number = 1000)
 # We then train a linear regression model to predict the value of Employed
 # (the number of people that will be employed given the independent variables).
 longley_model_lm <-
-  train(Employed ~ ., data = longley_train, test = longley_test[, 1:6],
+  train(Employed ~ ., data = longley_train,
         na.action = na.omit, method = "lm", metric = "RMSE",
         trControl = train_control)
 
