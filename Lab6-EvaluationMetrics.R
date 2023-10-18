@@ -116,17 +116,6 @@ if (require("languageserver")) {
 ## (1) "Accuracy" for classification problems and
 ## (2) "RMSE" for regression problems
 
-# Accuracy is the percentage of correctly classified instances out of all
-# instances. Accuracy is more useful in binary classification problems than
-# in multi-class classification problems.
-
-# On the other hand, Cohen's Kappa is similar to Accuracy however, it is more
-# useful on classification problems that do not have an equal distribution of
-# instances amongst the classes in the dataset.
-
-# For example, instead of Red are 50 instances and Blue are 50 instances,
-# the distribution can be that Red are 70 instances and Blue are 30 instances.
-
 # STEP 1. Install and Load the Required Packages ----
 ## ggplot2 ----
 if (require("ggplot2")) {
@@ -169,6 +158,17 @@ if (require("dplyr")) {
 }
 
 # 1. Accuracy and Cohen's Kappa ----
+# Accuracy is the percentage of correctly classified instances out of all
+# instances. Accuracy is more useful in binary classification problems than
+# in multi-class classification problems.
+
+# On the other hand, Cohen's Kappa is similar to Accuracy, however, it is more
+# useful for classification problems that do not have an equal distribution of
+# instances amongst the classes in the dataset.
+
+# For example, instead of Red are 50 instances and Blue are 50 instances,
+# the distribution can be that Red are 70 instances and Blue are 30 instances.
+
 ## 1.a. Load the dataset ----
 data(PimaIndiansDiabetes)
 
