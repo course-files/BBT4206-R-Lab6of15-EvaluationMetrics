@@ -1,5 +1,5 @@
 # *****************************************************************************
-# Lab 5: Evaluation Metrics ----
+# Lab 6: Evaluation Metrics ----
 #
 # Course Code: BBT4206
 # Course Name: Business Intelligence II
